@@ -38,6 +38,7 @@ word_vecs = np.loadtxt(VECTORS_PATH, encoding="utf-8",
 test_err_objs = None
 with open('test_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
     test_err_objs = pickle.load(pkl)
+test_samples_count = len(test_err_objs)
 
 # Java imports:
 from org.apache.lucene.search.spell import PlainTextDictionary, SpellChecker
@@ -84,10 +85,9 @@ def correct_word(word):
 good, bad = [], [] # append True's here to avoid threading issuses
 counter = 0
 with open('Vector_distance_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
-    for err_obj in test_err_objs:
-        print(counter, end='\r') # overwrite the number
+    for (sample_n, err_obj) in enumerate(test_err_objs):
+        print('{}/{}'.format(sample_n, test_samples_count), end='\r') # overwrite the number
         sys.stdout.flush()
-        counter += 1
 
         error = err_obj['error']
         true_correction = err_obj['correction']

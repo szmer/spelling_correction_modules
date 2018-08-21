@@ -10,6 +10,8 @@ export EXPERIM_FILE="results_$EXPERIM_ID" # all results will be written to this 
 export PLEWI_PATH='../plewic-yaml-1.0/' # the main error corpus
 export DICTIONARY_PATH='../../sgjp/vocab' # reference dictionary
 export VECTORS_PATH='../../nkjp/wektory/nkjp+wiki-forms-all-100-skipg-ns.txt/data'
+export CHARS_PATH='polish_chars'
+export EPOCHS_COUNT=4
 
 #export MAX_EDIT_DISTANCE=4
 
@@ -23,6 +25,10 @@ echo 'Testing edit distance...'
 
 date
 echo 'Testing vector distance...'
-python3 test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH
+#python3 test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH
+
+date
+echo 'Testing a neural net...true_'
+python3 -i test_neural.py  $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $CHARS_PATH
 
 date

@@ -44,12 +44,10 @@ def correct_word(word):
         return ''
 
 good, bad = [], [] # append True's here to avoid threading issuses
-counter = 0
 with open('Edit_distance_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
-    for err_obj in test_err_objs:
-        print(counter, end='\r') # overwrite the number
+    for (sample_n, err_obj) in enumerate(test_err_objs):
+        print('{}/{}'.format(sample_n, test_samples_count), end='\r') # overwrite the number
         sys.stdout.flush()
-        counter += 1
 
         error = err_obj['error']
         true_correction = err_obj['correction']
