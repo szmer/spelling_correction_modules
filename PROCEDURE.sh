@@ -12,7 +12,10 @@ export DICTIONARY_PATH='../../sgjp/vocab' # reference dictionary
 export VECTORS_PATH='../../nkjp/wektory/nkjp+wiki-forms-all-100-skipg-ns.txt/data'
 export NONVEC_SURROGATE_DISTANCE=1.0 # arbitrary cosine distance measure when some vectors are missing
 export CHARS_PATH='polish_chars'
-export EPOCHS_COUNT=3
+export EPOCHS_COUNT=50
+# for ELMo:
+export BATCH_SIZE=512
+export USE_CUDA=1
 
 #export MAX_EDIT_DISTANCE=4
 
@@ -34,7 +37,7 @@ echo 'Testing a neural net...'
 
 date
 echo 'Testing an ELMo net...'
-python3 -i test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $CHARS_PATH
+python3 -i test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA
 
 date
 echo 'Testing diacritical swapping...'

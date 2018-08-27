@@ -22,16 +22,22 @@ class Model(nn.Module):
                                            (config['token_embedder']['max_characters_per_token']
                                             * char_embedding.embedding.num_embeddings)),
                                  nn.ReLU(),
-                                 nn.Softmax())
+                                 nn.LogSoftmax(dim=0))
 
   def forward(self, word_inp, chars_package, mask):
-    # this is linear transformation embedding_dim -> projection_dim
-    # the mask is read as batch_size, seq_len
-    token_embedding = self.token_embedder(word_inp, chars_package, (word_inp.size(0), word_inp.size(1)))
-####    mask = Variable(mask_package[0]).cuda() if self.use_cuda else Variable(mask_package[0]) # all possible symbol positions
-    # the encoder reads mask as "batch_size, total_sequence_length"
+####    token_embeddings = []
+####    for word_n in range(word_inp.size(0)):
+####      # this is linear transformation embedding_dim -> projection_dim
+####      # the mask is read as batch_size, seq_len
+####      token_embedding = self.token_embedder(word_inp[word_n], chars_package,
+####                                            (word_inp[word_n].size(0), word_inp[word_n].size(1)))
+####      token_embeddings.append(token_embedding)
+####    token_embeddings = torch.stack(tuple(token_embeddings))
+    token_embedding = self.token_embedder(word_inp, chars_package,
+                                          (word_inp.size(0), word_inp.size(1)))
     if self.use_cuda:
       mask = mask.cuda()
+    # the encoder reads mask as "batch_size, total_sequence_length"
     encoder_output = self.encoder(token_embedding, mask)
 
     # the output has shape: (num_layers, batch_size, sequence_length, hidden_size - which is also the projection size)
@@ -42,8 +48,8 @@ class Model(nn.Module):
 
     # Use the encoder output to produce a correction.
     # (collapse ELMo layers, taking only the middle token (throw away markers):)
-    decoder_input = torch.cat([encoder_output[0, :, 1], encoder_output[1, :, 1], encoder_output[2, :, 1]],
-                               dim=1)
+    # the second index goes over batch members
+    decoder_input = torch.cat([encoder_output[0, :, 1, :], encoder_output[1, :, 1, :], encoder_output[2, :, 1, :]], dim=1)
     char_predictions = self.decoder(decoder_input)
 
     return char_predictions
