@@ -59,7 +59,7 @@ with open('Edit_distance_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_
             bad.append(True)
 print() # line feed
 
-with open(EXPERIM_FILE), 'a') as res_file:
+with open(EXPERIM_FILE, 'a') as res_file:
     timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
     print('Edit distance ({})'.format(timestamp), file=res_file)
     print('Accuracy: {}'.format(len(good)/len(test_err_objs)), file=res_file)

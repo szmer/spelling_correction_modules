@@ -8,6 +8,7 @@ EXPERIM_ID = sys.argv[2]
 EXPERIM_FILE = sys.argv[3]
 DICTIONARY_PATH = sys.argv[4]
 VECTORS_PATH = sys.argv[5]
+NONVEC_SURROGATE_DISTANCE = float(sys.argv[6])
 
 # Load the reference dictionary.
 dict_str = ''
@@ -74,7 +75,7 @@ def correct_word(word):
     # Add vector distance information.
     candidates = [(cand, ed_dist, distance.cosine(word_vec(cand), word_vec(word))
                                   if (cand in word_to_idx and word in word_to_idx)
-                                  else 1.0)
+                                  else NONVEC_SURROGATE_DISTANCE)
                   for (cand, ed_dist) in candidates]
     candidates.sort(key=lambda x: x[1]+x[2])
     if len(candidates) > 0:
@@ -101,5 +102,5 @@ print() # line feed
 
 with open(EXPERIM_FILE, 'a') as res_file:
     timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
-    print('Edit distance ({})'.format(timestamp), file=res_file)
+    print('Vector distance ({})'.format(timestamp), file=res_file)
     print('Accuracy: {}'.format(len(good)/len(test_err_objs)), file=res_file)

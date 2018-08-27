@@ -1,9 +1,10 @@
 import pickle, sys, datetime
+from random import shuffle
 import numpy as np
 from keras.models import Sequential, load_model
-from keras.layers import Dense, Activation
+from keras.layers import Dense, Activation, Dropout
 from keras.layers import LSTM, Embedding
-from keras.optimizers import RMSprop
+from keras.optimizers import Nadam
 
 THREADS_NUM = int(sys.argv[1])
 EXPERIM_ID = sys.argv[2]
@@ -69,21 +70,28 @@ try:
     print('Loaded the previously saved model.')
 except OSError: # saved model file not found
     model = Sequential()
-    model.add(Embedding(len(chars), 80))
-    model.add(LSTM(128))
+    model.add(Embedding(len(chars), 100))
+    model.add(LSTM(460, return_sequences=True))
+    model.add(Dropout(0.15))
+    model.add(LSTM(460))
+    model.add(Dropout(0.15))
     model.add(Dense(len(chars)))
     model.add(Activation('softmax'))
-    opt = RMSprop()
+    opt = Nadam()
 
     model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
 
+    corp_indices = list(range(len(train_x)))
     for epoch_n in range(EPOCHS_COUNT):
         print('Epoch {}/{} of training'.format(epoch_n+1, EPOCHS_COUNT))
         history = None
-        for sample_n in range(len((train_x))):
+        shuffle(corp_indices)
+        counter = 0
+        for sample_n in corp_indices:
             history = model.fit(train_x[sample_n], train_y[sample_n], verbose=0)
-            print('{}/{}'.format(sample_n, train_samples_count), end='\r') # overwrite the number
+            print('{}/{}'.format(counter, train_samples_count), end='\r') # overwrite the number
             sys.stdout.flush()
+            counter += 1
         print('\nMetrics: {}'.format(history.history))
 
     # Save the model.
