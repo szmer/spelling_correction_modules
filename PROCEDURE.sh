@@ -25,7 +25,7 @@ echo 'Testing edit distance...'
 
 date
 echo 'Testing vector distance...'
-#python3 test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH
+#python3 -i test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH $NONVEC_SURROGATE_DISTANCE
 
 date
 echo 'Testing a neural net...true_'
