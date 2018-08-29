@@ -1,7 +1,5 @@
 import torch, os
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
 from ELMoForManyLangs.src.modules.token_embedder import ConvTokenEmbedder
 from ELMoForManyLangs.src.modules.elmo import ElmobiLm
 
@@ -18,9 +16,9 @@ class Model(nn.Module):
     # in the input to the first layer we use 3 to collapse all ELMo layers into one
     self.lstm_hidden_size = 512
     self.lstm_layers_n = 2
-    self.decoder_feeder = nn.Sequential(nn.Linear(config['encoder']['projection_dim']*2*3,
-                                                  self.lstm_hidden_size*self.lstm_layers_n*2),
-                                        nn.ReLU())
+    self.decoder_prefiller = nn.Sequential(nn.Linear(config['encoder']['projection_dim']*2*3,
+                                                     self.lstm_hidden_size*self.lstm_layers_n*2),
+                                           nn.ReLU())
     self.decoder_lstm = nn.LSTM(input_size=char_embedding.n_d, # the input char
                                 hidden_size=self.lstm_hidden_size,
                                 num_layers=self.lstm_layers_n,
@@ -44,15 +42,15 @@ class Model(nn.Module):
     token_embedding = torch.cat([token_embedding, token_embedding], dim=2).view(1, sz[1], sz[2], sz[3])
     encoder_output = torch.cat([token_embedding, encoder_output], dim=0)
 
-    # Use the encoder output to produce a correction.
-    # (collapse ELMo layers, taking only the middle token (throw away markers):)
-    # the second index goes over batch members
-    decoder_input = torch.cat([encoder_output[0, :, 1, :], encoder_output[1, :, 1, :], encoder_output[2, :, 1, :]], dim=1)
-    decoder_init_state = self.decoder_feeder(decoder_input)
     # note that we do no masking of padded stuff, so LSTM can output seqs that are as long as it wants
     if self.use_cuda:
       chars_package = chars_package.cuda()
     embedded_chars = self.char_embedding(chars_package[:, 1, :]) # here we want the token w/o markers also
+    # Use the encoder output to produce a correction.
+    # (collapse ELMo layers, taking only the middle token (throw away markers):)
+    # the second index goes over batch members
+    decoder_input = torch.cat([encoder_output[0, :, 1, :], encoder_output[1, :, 1, :], encoder_output[2, :, 1, :]], dim=1)
+    decoder_init_state = self.decoder_prefiller(decoder_input)
     decoder_init_state = decoder_init_state.view(self.lstm_layers_n*2, # bidirectional
                                                  chars_package.size(0), # batch size
                                                  self.lstm_hidden_size)

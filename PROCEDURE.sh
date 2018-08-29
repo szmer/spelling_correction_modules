@@ -33,12 +33,16 @@ echo 'Testing vector distance...'
 #python3 -i test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH $NONVEC_SURROGATE_DISTANCE
 
 date
-echo 'Testing a neural net...'
-#python3 test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $CHARS_PATH
+echo 'Testing a unidirectional neural net...'
+#python3 -i test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA 'unidirectional'
+
+date
+echo 'Testing a bidirectional neural net...'
+python3 -i test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA 'bidirectional'
 
 date
 echo 'Testing an ELMo net...'
-python3 -i test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $MODEL_PATH $BATCH_SIZE $USE_CUDA
+#python3 -i test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $MODEL_PATH $BATCH_SIZE $USE_CUDA
 
 date
 echo 'Testing diacritical swapping...'

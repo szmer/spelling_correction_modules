@@ -1,16 +1,36 @@
-import pickle, sys, datetime
+import os, pickle, sys, datetime, json, csv
 from random import shuffle
 import numpy as np
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Activation, Dropout
-from keras.layers import LSTM, Embedding
-from keras.optimizers import Nadam
+import torch
 
 THREADS_NUM = int(sys.argv[1])
 EXPERIM_ID = sys.argv[2]
 EXPERIM_FILE = sys.argv[3]
 EPOCHS_COUNT = int(sys.argv[4])
-CHARS_PATH = sys.argv[5]
+BATCH_SIZE = int(sys.argv[5])
+USE_CUDA = bool(sys.argv[6])
+
+DIRECTIONS = sys.argv[7]
+is_bidirectional = True if DIRECTIONS == 'bidirectional' else False
+
+import neural_model
+
+# Setup embeddings.
+with open('./pl.model/char.dic') as char_lexicon_fl:
+    # (can't use csv package because the driver trips up on missing fields)
+    char_lexicon = dict([tuple(row.split('\t')) if len(row.split('\t')) == 2 else ('\u3000', row.split('\t')[0])
+                         for row in char_lexicon_fl.read().strip().split('\n')])
+    for token in char_lexicon:
+        char_lexicon[token] = int(char_lexicon[token])
+idx_to_char = { num : char for (num, char) in enumerate(char_lexicon) }
+char_embedding = torch.nn.Embedding(len(char_lexicon), 50, padding_idx=char_lexicon['<pad>'])
+max_chars = 17
+
+# Create the model.
+model = neural_model.Model(char_embedding, USE_CUDA, is_bidirectional)
+if USE_CUDA:
+    torch.cuda.set_device(0)
+    model.cuda()
 
 # Load the train and test corpora.
 train_err_objs = None
@@ -20,104 +40,112 @@ test_err_objs = None
 with open('test_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
     test_err_objs = pickle.load(pkl)
 
-# Load the list of chars.
-chars = [ '<BLANK>', '<AOV>' ]
-with open(CHARS_PATH) as char_fl:
-    chars += char_fl.read().strip().split('\n')
-char_to_idx = { char : num for (num, char) in enumerate(chars) }
-idx_to_char = { num : char for (num, char) in enumerate(chars) }
+train_samples_count = len(train_err_objs)
+test_samples_count = len(test_err_objs)
 
-# Vectorize the test&train corpora.
-train_x = [] # these are lists of arrays; each array in a list corresponds to step-by-step feeding chars to the net
-train_y = []
-test_x = []
-test_y = []
-def vectorize(err_objs, x, y):
-    for (sample_n, err_obj) in enumerate(err_objs):
-        x_indices = [ char_to_idx[char] if char in char_to_idx
-                                        else char_to_idx['<AOV>']
-                      for char in err_obj['error']]
-        y_indices = [ char_to_idx[char] if char in char_to_idx
-                                        else char_to_idx['<AOV>']
-                      for char in err_obj['correction'] ]
-        # 1 here and further below forces the delay between receiving an
-        # emission (in x) and predicting its true form in y.
-        sample_len = max(len(x_indices), len(y_indices)+1)
-        x_indices = x_indices + [ char_to_idx['<BLANK>'] ] * (sample_len-len(x_indices)) # align to the number of columns
-        y_indices = [ char_to_idx['<BLANK>'] ] + y_indices
+# Preprocessing error samples.
+def chars_ids(chars):
+    "Get a list of char ids, trimmed to max length, with added markers and padding"
+    chars = chars[:max_chars-2]
+    chars = ([ '<eow>' ] # yes, those are swapped in the original code
+             + list(chars)
+             + [ '<bow>' ]
+             + ((max_chars-len(chars)-2) * [ char_lexicon['<pad>'] ]))
+    char_ids = [ char_lexicon[char] if char in char_lexicon else char_lexicon['<oov>']
+                 for char in chars ]
+    return char_ids
 
-        sample_x_arr = np.zeros((sample_len, sample_len)) # indices of characters for each step of feeding
-                                                          # the sample into the net
-        sample_y_arr = np.zeros((sample_len, len(chars))) # one hot vector
-        for char_n in range(sample_len):
-            sample_x_arr[char_n, :char_n] = x_indices[:char_n]
+def preprocess(err_obj):
+    return chars_ids(err_obj['error']), chars_ids(err_obj['correction'])
 
-            if char_n < len(y_indices):
-                sample_y_arr[char_n, y_indices[char_n]] = 1.0
-            else:
-                sample_y_arr[char_n, char_to_idx['<BLANK>']] = 1.0
-
-        x.append(sample_x_arr)
-        y.append(sample_y_arr)
-vectorize(train_err_objs, train_x, train_y)
-vectorize(test_err_objs, test_x, test_y)
-train_samples_count = len(train_x)
-test_samples_count = len(test_x)
-
-# Define the model.
-try:
-    model = load_model('neural_model_{}.hdf5'.format(EXPERIM_ID))
-    print('Loaded the previously saved model.')
-except OSError: # saved model file not found
-    model = Sequential()
-    model.add(Embedding(len(chars), 100))
-    model.add(LSTM(460, return_sequences=True))
-    model.add(Dropout(0.15))
-    model.add(LSTM(460))
-    model.add(Dropout(0.15))
-    model.add(Dense(len(chars)))
-    model.add(Activation('softmax'))
-    opt = Nadam()
-
-    model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
-
-    corp_indices = list(range(len(train_x)))
+# Try to load a saved model, or train the model.
+if os.path.isfile('neural_{}_model_{}.torch'.format(DIRECTIONS, EXPERIM_ID)):
+    model.load_state_dict(torch.load('neural_{}_model_{}.torch'.format(DIRECTIONS, EXPERIM_ID)))
+else: # saved model file not found
+    corp_indices = list(range(train_samples_count))
+    loss = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters())
+    loss_history = []
     for epoch_n in range(EPOCHS_COUNT):
         print('Epoch {}/{} of training'.format(epoch_n+1, EPOCHS_COUNT))
-        history = None
         shuffle(corp_indices)
         counter = 0
-        for sample_n in corp_indices:
-            history = model.fit(train_x[sample_n], train_y[sample_n], verbose=0)
+        while counter < len(corp_indices):
+            batch_xs, batch_ys = [], []
+            for i in range(BATCH_SIZE):
+                sample_n = corp_indices[counter]+i
+                if sample_n >= len(corp_indices):
+                    break
+                x, y = preprocess(train_err_objs[sample_n])
+                batch_xs.append(x)
+                batch_ys.append(y)
+
+            predicted_chars = model.forward(torch.LongTensor(batch_xs))
+            predicted_chars = predicted_chars.view(max_chars*len(batch_xs),
+                                                char_embedding.num_embeddings)
+            optimizer.zero_grad()
+            #for char_n in range(max_chars):
+            y = torch.LongTensor(sum(batch_ys, []))
+            if USE_CUDA:
+                y = y.cuda()
+            loss_val = loss(predicted_chars, y)
+            loss_val.backward()
+            optimizer.step()
+
             print('{}/{}'.format(counter, train_samples_count), end='\r') # overwrite the number
             sys.stdout.flush()
-            counter += 1
-        print('\nMetrics: {}'.format(history.history))
+            counter += BATCH_SIZE
+        print('\nLoss metric: {}'.format(loss_val))
+        loss_history.append(loss_val)
 
     # Save the model.
-    model.save('neural_model_{}.hdf5'.format(EXPERIM_ID))
+    torch.save(model.state_dict(), 'neural_{}_model_{}.torch'.format(DIRECTIONS, EXPERIM_ID))
+
+    # Write the loss history to a text file.
+    with open('Neural_{}_history_{}'.format(DIRECTIONS,
+                                            datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')), 'w+') as his_fl:
+        for item in loss_history:
+            print(item.item(), file=his_fl, end=' ')
 
 # Test the model.
 good = 0
-print('Evaluating neural prediction.')
-with open('Neural_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
-    for sample_n in range(len(test_err_objs)):
-        print('{}/{}'.format(sample_n, test_samples_count), end='\r') # overwrite the number
+print('Evaluating neural prediction of {} LSTM.'.format(DIRECTIONS))
+with open('Neural_{}_corrections_{}.tab'.format(EXPERIM_ID, DIRECTIONS), 'w+') as corrs_file:
+    counter = 0
+    while counter < test_samples_count:
+        batch_xs, batch_ys = [], []
+        for i in range(BATCH_SIZE):
+            sample_n = counter + i
+            if sample_n >= test_samples_count:
+                break
+            x, y = preprocess(test_err_objs[sample_n])
+            batch_xs.append(x)
+            batch_ys.append(y)
+
+        predicted_chars = model.forward(torch.LongTensor(batch_xs))
+        predicted_chars = predicted_chars.view(max_chars*len(batch_xs),
+                                               char_embedding.num_embeddings)
+
+        predictions = torch.argmax(predicted_chars, dim=1)
+        for i in range(BATCH_SIZE):
+            sample_n = counter + i
+            if sample_n >= test_samples_count:
+                break
+            predicted_chars = [idx_to_char[predictions[i*max_chars:(i+1)*max_chars][char_n].item()] # the .item() part converts tensor to number
+                               for char_n in range(max_chars)]
+            correction = ''.join([char for char in predicted_chars
+                                if len(char) == 1]) # eliminate markers
+            if test_err_objs[sample_n]['correction'] == correction:
+                good += 1
+            print('{}\t{}'.format(test_err_objs[sample_n]['error'], correction), file=corrs_file)
+
+        print('{}/{}'.format(counter, test_samples_count), end='\r') # overwrite the number
         sys.stdout.flush()
-
-        sample_x_arr = test_x[sample_n]
-        prediction = np.argmax(model.predict(sample_x_arr), axis=1)
-        predicted_chars = [idx_to_char[prediction[char_n]] for char_n in range(prediction.shape[0])]
-        correction = ''.join([char for char in predicted_chars
-                              if char != '<BLANK>'])
-
-        if test_err_objs[sample_n]['correction'] == correction:
-            good += 1
-        print('{}\t{}'.format(test_err_objs[sample_n]['error'], correction), file=corrs_file)
+        counter += BATCH_SIZE
 print() # line feed
 
 # Write the results.
 with open(EXPERIM_FILE, 'a') as res_file:
     timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
-    print('Neural net ({})'.format(timestamp), file=res_file)
+    print('{} neural ({})'.format(DIRECTIONS, timestamp), file=res_file)
     print('Accuracy: {}'.format(good/len(test_err_objs)), file=res_file)

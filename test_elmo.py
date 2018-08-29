@@ -1,4 +1,4 @@
-import pickle, sys, datetime, json, csv
+import os, pickle, sys, datetime, json, csv
 from random import shuffle
 import numpy as np
 import torch
@@ -86,9 +86,9 @@ def preprocess(err_obj):
     return x, y, mask
 
 # Try to load a saved model, or train the model.
-try:
+if os.path.isfile('elmo_model_{}.torch'.format(EXPERIM_ID)):
     model.load_state_dict(torch.load('elmo_model_{}.torch'.format(EXPERIM_ID)))
-except OSError: # saved model file not found
+else: # saved model file not found
     corp_indices = list(range(train_samples_count))
     loss = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters())
@@ -179,5 +179,5 @@ print() # line feed
 # Write the results.
 with open(EXPERIM_FILE, 'a') as res_file:
     timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
-    print('ELMo ({})'.format(timestamp file=res_file))
-    print('Accuracy: {}'.format(good/len(test_err_objs)) file=res_file)
+    print('ELMo ({})'.format(timestamp), file=res_file)
+    print('Accuracy: {}'.format(good/len(test_err_objs)), file=res_file)
