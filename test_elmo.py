@@ -7,8 +7,9 @@ THREADS_NUM = int(sys.argv[1])
 EXPERIM_ID = sys.argv[2]
 EXPERIM_FILE = sys.argv[3]
 EPOCHS_COUNT = int(sys.argv[4])
-BATCH_SIZE = int(sys.argv[5])
-USE_CUDA = bool(sys.argv[6])
+MODEL_PATH = sys.argv[5]
+BATCH_SIZE = int(sys.argv[6])
+USE_CUDA = bool(sys.argv[7])
 
 # Load and setup the ready Elmo solution.
 import ELMoForManyLangs.src as elmolangs
@@ -39,6 +40,7 @@ model = elmo_model.Model(elmo_config, word_embedding, char_embedding, USE_CUDA)
 if USE_CUDA:
     torch.cuda.set_device(0)
     model.cuda()
+model.load_model(MODEL_PATH)
 
 # Load the train and test corpora.
 ####train_err_objs = None

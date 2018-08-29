@@ -14,6 +14,7 @@ export NONVEC_SURROGATE_DISTANCE=1.0 # arbitrary cosine distance measure when so
 export CHARS_PATH='polish_chars'
 export EPOCHS_COUNT=50
 # for ELMo:
+export MODEL_PATH='pl.model'
 export BATCH_SIZE=512
 export USE_CUDA=1
 
@@ -37,7 +38,7 @@ echo 'Testing a neural net...'
 
 date
 echo 'Testing an ELMo net...'
-python3 -i test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA
+python3 -i test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $MODEL_PATH $BATCH_SIZE $USE_CUDA
 
 date
 echo 'Testing diacritical swapping...'
