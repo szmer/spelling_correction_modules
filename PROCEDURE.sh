@@ -12,7 +12,7 @@ export DICTIONARY_PATH='../../sgjp/vocab' # reference dictionary
 export VECTORS_PATH='../../nkjp/wektory/nkjp+wiki-forms-all-100-skipg-ns.txt/data'
 export NONVEC_SURROGATE_DISTANCE=1.0 # arbitrary cosine distance measure when some vectors are missing
 export CHARS_PATH='polish_chars'
-export EPOCHS_COUNT=500
+export EPOCHS_COUNT=35
 # for ELMo:
 export MODEL_PATH='pl.model'
 export BATCH_SIZE=512

@@ -11,11 +11,14 @@ MODEL_PATH = sys.argv[5]
 BATCH_SIZE = int(sys.argv[6])
 USE_CUDA = bool(sys.argv[7])
 
+#
 # Load and setup the ready Elmo solution.
+#
 import ELMoForManyLangs.src as elmolangs
 import ELMoForManyLangs.src.modules.embedding_layer
 import elmo_model
 
+# Load and setup embeddings.
 with open('./ELMoForManyLangs/configs/cnn_50_100_512_4096_sample.json') as elmo_config_fl:
     elmo_config = json.load(elmo_config_fl)
 elmo_config['token_embedder']['max_characters_per_token'] = 17
@@ -35,6 +38,7 @@ with open('./pl.model/word.dic') as word_lexicon_fl:
 idx_to_char = { num : char for (num, char) in enumerate(char_lexicon) }
 char_embedding = elmolangs.modules.embedding_layer.EmbeddingLayer(elmo_config['token_embedder']['char_dim'], char_lexicon, fix_emb=False, embs=None)
 word_embedding = elmolangs.modules.embedding_layer.EmbeddingLayer(elmo_config['token_embedder']['word_dim'], word_lexicon, fix_emb=False, embs=None)
+
 # Create the model.
 model = elmo_model.Model(elmo_config, word_embedding, char_embedding, USE_CUDA)
 if USE_CUDA:
@@ -43,24 +47,19 @@ if USE_CUDA:
 model.load_model(MODEL_PATH)
 
 # Load the train and test corpora.
-####train_err_objs = None
-####with open('train_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
-####    train_err_objs = pickle.load(pkl)
-####test_err_objs = None
-####with open('test_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
-####    test_err_objs = pickle.load(pkl)
-dev_err_objs = None
-with open('dev_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
-    dev_err_objs = pickle.load(pkl)
+train_err_objs = None
+with open('train_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
+    train_err_objs = pickle.load(pkl)
+test_err_objs = None
+with open('test_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
+    test_err_objs = pickle.load(pkl)
 
-# Vectorize the test&train corpora.
-####train_x = []
-####train_y = []
-####test_x = []
-####test_y = []
-dev_x = []
-dev_y = []
+train_samples_count = len(train_err_objs)
+test_samples_count = len(test_err_objs)
+
+# Preprocessing error samples.
 def chars_ids(chars):
+    "Get a list of char ids, trimmed to max length, with added markers and padding"
     chars = chars[:max_chars-2]
     chars = ([ '<eow>' ] # yes, those are swapped in the original code
              + list(chars)
@@ -70,17 +69,10 @@ def chars_ids(chars):
                  for char in chars ]
     return char_ids
 
-# NOTE not used
-def chars_onehots(chars):
-    ids = chars_ids(chars)
-    return [np.array([(i == char_id) for i in range(len(char_lexicon))], dtype=np.float32)
-              for char_id in ids]
-
 def preprocess(err_obj):
     x_token_ids = [word_lexicon['<bos>'], # mock sentence markers, include one sentence
                     word_lexicon['<oov>'], # these are non-word errors by definition
                     word_lexicon['<eos>']]
-                #######err_obj['error'][:max_chars+2],
     ####x_text = [ err_obj['error'] ]
     x_chars_ids = [ chars_ids(['<bos>']), chars_ids(err_obj['error']), chars_ids(['<eos>']) ]
 
@@ -93,67 +85,69 @@ def preprocess(err_obj):
            #### + [ 0 ] * (max_chars-len(x_token_ids)))
     return x, y, mask
 
-####preprocess(dev_err_objs, dev_x, dev_y)
-dev_samples_count = len(dev_err_objs)
-####preprocess(train_err_objs, train_x, train_y)
-####preprocess(test_err_objs, test_x, test_y)
-####train_samples_count = len(train_x)
-####test_samples_count = len(test_x)
+# Try to load a saved model, or train the model.
+try:
+    model.load_state_dict(torch.load('elmo_model_{}.torch'.format(EXPERIM_ID)))
+except OSError: # saved model file not found
+    corp_indices = list(range(train_samples_count))
+    loss = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(model.parameters())
+    loss_history = []
+    for epoch_n in range(EPOCHS_COUNT):
+        print('Epoch {}/{} of training'.format(epoch_n+1, EPOCHS_COUNT))
+        shuffle(corp_indices)
+        counter = 0
+        while counter < len(corp_indices):
+            batch_xs, batch_ys, batch_masks = [], [], []
+            for i in range(BATCH_SIZE):
+                sample_n = corp_indices[counter]+i
+                if sample_n >= len(corp_indices):
+                    break
+                x, y, mask = preprocess(train_err_objs[sample_n])
+                batch_xs.append(x)
+                batch_ys.append(y)
+                batch_masks.append(mask)
 
-# Train the model.
-corp_indices = list(range(dev_samples_count))
-loss = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(model.parameters())
-for epoch_n in range(EPOCHS_COUNT):
-    print('Epoch {}/{} of training'.format(epoch_n+1, EPOCHS_COUNT))
-    shuffle(corp_indices)
-    counter = 0
-    while counter < len(corp_indices):
-        batch_xs, batch_ys, batch_masks = [], [], []
-        for i in range(BATCH_SIZE):
-            sample_n = corp_indices[counter]+i
-            if sample_n >= len(corp_indices):
-                break
-            x, y, mask = preprocess(dev_err_objs[sample_n])
-            batch_xs.append(x)
-            batch_ys.append(y)
-            batch_masks.append(mask)
+            predicted_chars = model.forward(torch.tensor([x[0] for x in batch_xs]),
+                                            torch.LongTensor([x[1] for x in batch_xs]),
+                                            torch.LongTensor([mask for mask in batch_masks]))
+            predicted_chars = predicted_chars.view(max_chars*len(batch_xs),
+                                                char_embedding.embedding.num_embeddings)
+            optimizer.zero_grad()
+            #for char_n in range(max_chars):
+            y = torch.LongTensor(sum(batch_ys, []))
+            if USE_CUDA:
+                y = y.cuda()
+            loss_val = loss(predicted_chars, y)
+            loss_val.backward()
+            optimizer.step()
 
-        predicted_chars = model.forward(torch.tensor([x[0] for x in batch_xs]),
-                                        torch.LongTensor([x[1] for x in batch_xs]),
-                                        torch.LongTensor([mask for mask in batch_masks]))
-        predicted_chars = predicted_chars.view(max_chars*len(batch_xs),
-                                               char_embedding.embedding.num_embeddings)
-        optimizer.zero_grad()
-        #for char_n in range(max_chars):
-        y = torch.LongTensor(sum(batch_ys, []))
-        if USE_CUDA:
-            y = y.cuda()
-        loss_val = loss(predicted_chars, y)
-        loss_val.backward()
-        optimizer.step()
+            print('{}/{}'.format(counter, train_samples_count), end='\r') # overwrite the number
+            sys.stdout.flush()
+            counter += BATCH_SIZE
+        print('\nLoss metric: {}'.format(loss_val))
+        loss_history.append(loss_val)
 
-        print('{}/{}'.format(counter, dev_samples_count), end='\r') # overwrite the number
-        sys.stdout.flush()
-        counter += BATCH_SIZE
-    print('\nLoss metric: {}'.format(loss_val))
-    # TODO: zbierać historię funkcji, testować po drodze?
+    # Save the model.
+    torch.save(model.state_dict(), 'elmo_model_{}.torch'.format(EXPERIM_ID))
+
+    # Write the loss history to a text file.
+    with open('Elmo_history_{}'.format(datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')), 'w+') as his_fl:
+        for item in loss_history:
+            print(item.item(), file=his_fl, end=' ')
 
 # Test the model.
 good = 0
 print('Evaluating neural prediction with ELMo.')
 with open('Elmo_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
     counter = 0
-    while counter < len(corp_indices):
-        print('{}/{}'.format(sample_n, dev_samples_count), end='\r') # overwrite the number
-        sys.stdout.flush()
-
+    while counter < test_samples_count:
         batch_xs, batch_ys, batch_masks = [], [], []
         for i in range(BATCH_SIZE):
             sample_n = counter + i
-            if sample_n >= len(corp_indices):
+            if sample_n >= test_samples_count:
                 break
-            x, y, mask = preprocess(dev_err_objs[sample_n])
+            x, y, mask = preprocess(test_err_objs[sample_n])
             batch_xs.append(x)
             batch_ys.append(y)
             batch_masks.append(mask)
@@ -167,20 +161,23 @@ with open('Elmo_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
         predictions = torch.argmax(predicted_chars, dim=1)
         for i in range(BATCH_SIZE):
             sample_n = counter + i
-            if sample_n >= len(corp_indices):
+            if sample_n >= test_samples_count:
                 break
             predicted_chars = [idx_to_char[predictions[i*max_chars:(i+1)*max_chars][char_n].item()] # the .item() part converts tensor to number
                                for char_n in range(max_chars)]
             correction = ''.join([char for char in predicted_chars
                                 if len(char) == 1]) # eliminate markers
-            if dev_err_objs[sample_n]['correction'] == correction:
+            if test_err_objs[sample_n]['correction'] == correction:
                 good += 1
-            print('{}\t{}'.format(dev_err_objs[sample_n]['error'], correction), file=corrs_file)
+            print('{}\t{}'.format(test_err_objs[sample_n]['error'], correction), file=corrs_file)
+
+        print('{}/{}'.format(counter, test_samples_count), end='\r') # overwrite the number
+        sys.stdout.flush()
         counter += BATCH_SIZE
 print() # line feed
 
 # Write the results.
-####with open(EXPERIM_FILE, 'a') as res_file:
-timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
-print('ELMo ({})'.format(timestamp))##, file=res_file)
-print('Accuracy: {}'.format(good/len(dev_err_objs)))##, file=res_file)
+with open(EXPERIM_FILE, 'a') as res_file:
+    timestamp = datetime.datetime.now().strftime('%d-%m-%Y_%H-%M-%S')
+    print('ELMo ({})'.format(timestamp file=res_file))
+    print('Accuracy: {}'.format(good/len(test_err_objs)) file=res_file)
