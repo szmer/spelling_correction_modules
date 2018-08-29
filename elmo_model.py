@@ -1,4 +1,4 @@
-import torch
+import torch, os
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
@@ -12,27 +12,25 @@ class Model(nn.Module):
     self.config = config
 
     self.token_embedder = ConvTokenEmbedder(config, word_embedding, char_embedding, use_cuda)
+    self.char_embedding = char_embedding # for the decoder
     self.encoder = ElmobiLm(config, use_cuda)
     self.output_dim = config['encoder']['projection_dim'] # of the encoder
     # in the input to the first layer we use 3 to collapse all ELMo layers into one
-    self.decoder = nn.Sequential(nn.Linear(config['encoder']['projection_dim']*2*3,
-                                           config['encoder']['projection_dim']*2),
-                                 nn.ReLU(),
-                                 nn.Linear(config['encoder']['projection_dim']*2,
-                                           (config['token_embedder']['max_characters_per_token']
-                                            * char_embedding.embedding.num_embeddings)),
-                                 nn.ReLU(),
-                                 nn.LogSoftmax(dim=0))
+    self.lstm_hidden_size = 512
+    self.lstm_layers_n = 2
+    self.decoder_feeder = nn.Sequential(nn.Linear(config['encoder']['projection_dim']*2*3,
+                                                  self.lstm_hidden_size*self.lstm_layers_n*2),
+                                        nn.ReLU())
+    self.decoder_lstm = nn.LSTM(input_size=char_embedding.n_d, # the input char
+                                hidden_size=self.lstm_hidden_size,
+                                num_layers=self.lstm_layers_n,
+                                bidirectional=True,
+                                batch_first=True)
+    self.decoder_decision = nn.Sequential(nn.Linear(self.lstm_hidden_size*2,
+                                                    char_embedding.embedding.num_embeddings),
+                                          nn.LogSoftmax(dim=0))
 
   def forward(self, word_inp, chars_package, mask):
-####    token_embeddings = []
-####    for word_n in range(word_inp.size(0)):
-####      # this is linear transformation embedding_dim -> projection_dim
-####      # the mask is read as batch_size, seq_len
-####      token_embedding = self.token_embedder(word_inp[word_n], chars_package,
-####                                            (word_inp[word_n].size(0), word_inp[word_n].size(1)))
-####      token_embeddings.append(token_embedding)
-####    token_embeddings = torch.stack(tuple(token_embeddings))
     token_embedding = self.token_embedder(word_inp, chars_package,
                                           (word_inp.size(0), word_inp.size(1)))
     if self.use_cuda:
@@ -50,6 +48,19 @@ class Model(nn.Module):
     # (collapse ELMo layers, taking only the middle token (throw away markers):)
     # the second index goes over batch members
     decoder_input = torch.cat([encoder_output[0, :, 1, :], encoder_output[1, :, 1, :], encoder_output[2, :, 1, :]], dim=1)
-    char_predictions = self.decoder(decoder_input)
+    decoder_init_state = self.decoder_feeder(decoder_input)
+    # note that we do no masking of padded stuff, so LSTM can output seqs that are as long as it wants
+    if self.use_cuda:
+      chars_package = chars_package.cuda()
+    embedded_chars = self.char_embedding(chars_package[:, 1, :]) # here we want the token w/o markers also
+    decoder_init_state = decoder_init_state.view(self.lstm_layers_n*2, # bidirectional
+                                                 chars_package.size(0), # batch size
+                                                 self.lstm_hidden_size)
+    decoder_output, hidden = self.decoder_lstm(embedded_chars, (decoder_init_state, decoder_init_state))
+    # + maybe add an intermediate linear transformation?
+    decoder_decisions = self.decoder_decision(decoder_output)
+    return decoder_decisions
 
-    return char_predictions
+  def load_model(self, path):
+    self.token_embedder.load_state_dict(torch.load(os.path.join(path, 'token_embedder.pkl'), map_location=lambda storage, loc: storage))
+    self.encoder.load_state_dict(torch.load(os.path.join(path, 'encoder.pkl'), map_location=lambda storage, loc: storage))

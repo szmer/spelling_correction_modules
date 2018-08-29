@@ -84,10 +84,10 @@ def preprocess(err_obj):
     ####x_text = [ err_obj['error'] ]
     x_chars_ids = [ chars_ids(['<bos>']), chars_ids(err_obj['error']), chars_ids(['<eos>']) ]
 
-    y_chars_onehots = chars_ids(err_obj['correction'])
+    y_char_ids = chars_ids(err_obj['correction'])
 
     x = ((x_token_ids, x_chars_ids))
-    y = (y_chars_onehots)
+    y = (y_char_ids)
     mask = [ 1 ] * (len(x_token_ids))
            ## this messes up the encodder:
            #### + [ 0 ] * (max_chars-len(x_token_ids)))
