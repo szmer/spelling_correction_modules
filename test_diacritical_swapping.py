@@ -77,14 +77,8 @@ def correct_word(word):
         return candidates[0][0]
     else:
         return ''
-####
-####m = max([len(err_obj['correction']) for err_obj in test_err_objs])
-####print(m)
-####print([err_n for (err_n, err_obj) in enumerate(test_err_objs)
-####       if len(err_obj['correction']) == m])
-####fail()
 
-good, bad = [], [] # append True's here to avoid threading issuses
+good, bad = [], []
 counter = 0
 with open('Diacritical_swapping_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
     for (sample_n, err_obj) in enumerate(test_err_objs):

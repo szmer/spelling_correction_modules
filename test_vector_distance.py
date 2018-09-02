@@ -91,7 +91,7 @@ def correct_word(word):
     else:
         return ''
 
-good, bad = [], [] # append True's here to avoid threading issuses
+good, bad = [], []
 counter = 0
 with open('Vector_distance_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
     for (sample_n, err_obj) in enumerate(test_err_objs):
