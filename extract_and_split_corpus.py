@@ -54,6 +54,9 @@ pool.map(load_errors_from_yaml, good_filenames)
 pool.close()
 pool.join() # wait for finish
 
+print('{} errors extracted.'.format(len(error_objs)))
+fail()
+
 # Split the corpus and dump pickle files.
 shuffled_indices = list(range(len(error_objs)))
 random.shuffle(shuffled_indices)

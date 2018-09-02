@@ -12,8 +12,16 @@ NONVEC_SURROGATE_DISTANCE = float(sys.argv[6])
 
 # Load the reference dictionary.
 dict_str = ''
+copyright_end = False
 with open(DICTIONARY_PATH) as inp:
-    dict_str = inp.read().strip()
+    for line in inp:
+        line = line.strip()
+        if '</COPYRIGHT>' in line:
+            copyright_end = True
+            continue
+        if not copyright_end:
+            continue
+        dict_str += ' ' + line.split('\t')[0]
 
 # Load word vectors.
 word_to_idx = {} # ie. indices of vectors
