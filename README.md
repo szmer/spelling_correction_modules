@@ -18,4 +18,6 @@ In `scripts/` you can find a bash script meant for making PlEWi usable by this c
 
 In `PROCEDURE.sh` you can point the script to your resources and tweak some variables, like whether you want to `USE_CUDA` in training neural nets.
 
-Then run `bash PROCEDURE.sh`. All accuracies will be written to `results_x`, where `x` is your specified `EXPERIM_ID`. Note the entire test may run for around 20 hours depending on your specific specs.
+Then run `bash PROCEDURE.sh`. All metrics will be written to `results_x`, where `x` is your specified `EXPERIM_ID`. Note the entire test may run for around 20 hours depending on your specific specs.
+
+The script `chart_history.py` can be used to plot histories of networks training -- you need to adjust paths to history files which are left by scripts testing the nets.
