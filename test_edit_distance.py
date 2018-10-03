@@ -24,7 +24,7 @@ test_err_objs = None
 with open('test_set_{}.pkl'.format(EXPERIM_ID), 'rb') as pkl:
     test_err_objs = pickle.load(pkl)
 
-# Java imports:
+## Java imports:
 from org.apache.lucene.search.spell import PlainTextDictionary, SpellChecker
 # boilerplate for setting up spellchecking:
 from java.io import StringReader

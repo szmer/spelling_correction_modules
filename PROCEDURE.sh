@@ -15,30 +15,30 @@ export USE_CUDA=1
 
 date
 echo 'Splitting the corpus... '
-python3 extract_and_split_corpus.py $THREADS_NUM $EXPERIM_ID $PLEWI_PATH
+#python3 extract_and_split_corpus.py $THREADS_NUM $EXPERIM_ID $PLEWI_PATH
 
 date
 echo 'Testing edit distance...'
-python3 test_edit_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH
+python3 -i test_edit_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH
 
 date
 echo 'Testing diacritical swapping...'
-python3 test_diacritical_swapping.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH
+#python3 test_diacritical_swapping.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH
 
 date
 echo 'Testing vector distance...'
-python3 test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH $NONVEC_SURROGATE_DISTANCE
+#python3 test_vector_distance.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $DICTIONARY_PATH $VECTORS_PATH $NONVEC_SURROGATE_DISTANCE
 
 date
 echo 'Testing a unidirectional neural net...'
-python3 test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA 'unidirectional'
+#python3 test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA 'unidirectional'
 
 date
 echo 'Testing a bidirectional neural net...'
-python3 test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA 'bidirectional'
+#python3 test_neural.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $BATCH_SIZE $USE_CUDA 'bidirectional'
 
 date
 echo 'Testing an ELMo net...'
-python3 test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $MODEL_PATH $BATCH_SIZE $USE_CUDA
+#python3 test_elmo.py $THREADS_NUM $EXPERIM_ID $EXPERIM_FILE $EPOCHS_COUNT $MODEL_PATH $BATCH_SIZE $USE_CUDA
 
 date

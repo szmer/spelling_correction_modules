@@ -2,7 +2,7 @@ import pylab
 
 unidirectional_history_file = '../Neural_unidirectional_history_29-08-2018_22-34-53'
 bidirectional_history_file = '../Neural_bidirectional_history_30-08-2018_00-46-38'
-elmo_history_file = '../Elmo_history_29-08-2018_19-18-43'
+elmo_history_file = '../Elmo_history_02-10-2018_07-13-24'
 
 epochs_text = 'Przebieg sieci'
 loss_text = 'Wartość entropii krzyżowej'
