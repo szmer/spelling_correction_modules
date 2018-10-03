@@ -107,11 +107,13 @@ else: # saved model file not found
                 x, y, mask = preprocess(train_err_objs[sample_n])
                 batch_xs.append(x)
                 batch_ys.append(y)
+                batch_masks.append(mask)
+
             predicted_distribution = model.forward(torch.tensor([x[0] for x in batch_xs]),
                                              torch.LongTensor([x[1] for x in batch_xs]),
-                                             torch.LongTensor([mask for mask in batch_masks]))
-            predicted_distribution = predicted_onehots.view(max_chars*len(batch_xs),
-                                                            char_embedding.embedding.num_embeddings)
+                                             torch.LongTensor(batch_masks))
+            predicted_distribution = predicted_distribution.view(max_chars*len(batch_xs),
+                                                                 char_embedding.embedding.num_embeddings)
             optimizer.zero_grad()
             y = torch.LongTensor(sum(batch_ys, []))
             if USE_CUDA:
@@ -156,7 +158,7 @@ with open('Elmo_corrections_{}.tab'.format(EXPERIM_ID), 'w+') as corrs_file:
 
             predicted_distribution = model.forward(torch.tensor([x[0] for x in batch_xs]),
                                             torch.LongTensor([x[1] for x in batch_xs]),
-                                            torch.LongTensor([mask for mask in batch_masks]))
+                                            torch.LongTensor(batch_masks))
             predicted_distribution = predicted_distribution.view(max_chars*len(batch_xs),
                                                 char_embedding.embedding.num_embeddings)
 
